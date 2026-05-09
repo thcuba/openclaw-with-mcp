@@ -1,58 +1,41 @@
-name: Feature request
-description: Suggest an improvement for the OpenClaw Home Assistant add-on.
-title: "feat: "
-labels:
-  - enhancement
+name: "💡 Feature Request"
+description: "Suggest a new feature or improvement"
+title: "[FEATURE] "
+labels: ["enhancement"]
+
 body:
   - type: markdown
     attributes:
       value: |
-        Thanks for the idea. Concrete use-cases help us prioritize.
+        ## 💡 Suggest a Feature
+
+        Tell us what you'd like to see added to ha-mcp!
 
   - type: textarea
-    id: problem
+    id: feature_description
     attributes:
-      label: What problem are you trying to solve?
-      placeholder: As a user, I struggle with...
-    validations:
-      required: true
-
-  - type: textarea
-    id: proposal
-    attributes:
-      label: Proposed solution
-      placeholder: Describe what should be added or changed.
-    validations:
-      required: true
-
-  - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives considered
-      placeholder: Workarounds you've tried, and why they are not enough.
-
-  - type: textarea
-    id: user_flow
-    attributes:
-      label: Suggested UX / configuration flow
+      label: "What would you like to see?"
+      description: "Describe the feature or improvement you want."
       placeholder: |
-        1) User opens ...
-        2) User sets ...
-        3) Add-on does ...
+        Example: "Add a tool to manage Home Assistant scenes"
+    validations:
+      required: true
 
   - type: textarea
-    id: impact
+    id: use_case
     attributes:
-      label: Impact
-      description: Who benefits and how often this would be used.
-      placeholder: This helps users who...
+      label: "Why do you need this?"
+      description: "What problem does this solve? What would you use it for?"
+      placeholder: |
+        Example: "I have 10 scenes for different times of day, and I want the AI to activate them based on context without needing to write automations."
+    validations:
+      required: true
 
-  - type: checkboxes
-    id: scope
+  - type: textarea
+    id: additional_context
     attributes:
-      label: Scope
-      options:
-        - label: This is specific to the Home Assistant add-on (not upstream OpenClaw core).
-          required: false
-        - label: I can help test this on my setup.
-          required: false
+      label: "Additional context"
+      description: "Any other details, examples, or related issues?"
+      placeholder: "Optional: screenshots, examples, links to similar features..."
+    validations:
+      required: false
