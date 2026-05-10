@@ -22,9 +22,7 @@ jobs:
       - name: Install dependencies
         run: |
           uv sync --all-extras
-          uv venv .venv
+          # Add venv to PATH
           echo "$PWD/.venv/bin" >> $GITHUB_PATH
-          # Install test dependencies manually since uv sync may not install them
-          pip install testcontainers ruamel.yaml
       - name: Run tests
         run: pytest tests/ -v --tb=short
