@@ -17,6 +17,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import json
+import inspect
 import logging
 import re
 import sys
@@ -149,7 +150,9 @@ async def tool_call_loop(
         if tools:
             kwargs["tools"] = tools
 
-        response = await client.chat.completions.create(**kwargs)
+        response = client.chat.completions.create(**kwargs)
+        if asyncio.iscoroutine(response):
+            response = await response
         num_turns += 1
 
         # Accumulate running token totals; also capture first-turn prompt size as
