@@ -21,7 +21,7 @@ API_TIMEOUT = 120
 ENTITY_TIMEOUT = 30
 
 
-def wait_for_ha_ready(url: str, token: str) -> None:
+def wait_for_ha_ready(url: str, token: str, log: callable = logging.info) -> None:
     """Wait until HA is fully ready: components loaded, entities registered.
 
     Raises TimeoutError if any gate is not reached within its timeout.
@@ -29,7 +29,7 @@ def wait_for_ha_ready(url: str, token: str) -> None:
     headers = {"Authorization": f"Bearer {token}"}
 
     # Gate 1: API reachable and components loaded
-    logger.info(f"Waiting for HA at {url} ...")
+    log(f"Waiting for HA at {url} ...")
     api_responded = False
     last_component_count = 0
     for attempt in range(API_TIMEOUT):
@@ -41,16 +41,16 @@ def wait_for_ha_ready(url: str, token: str) -> None:
                 component_count = len(data.get("components", []))
                 if component_count >= MIN_COMPONENTS:
                     version = data.get("version", "unknown")
-                    logger.info(
+                    log(
                         f"HA stabilized: {component_count} components, "
                         f"version {version} ({attempt + 1}s)"
                     )
                     break
                 if component_count != last_component_count:
-                    logger.info(f"  {component_count} components loaded, waiting for {MIN_COMPONENTS}+...")
+                    log(f"  {component_count} components loaded, waiting for {MIN_COMPONENTS}+...")
                     last_component_count = component_count
         except (requests.RequestException, ValueError) as exc:
-            logger.debug("Readiness check failed (retrying): %s", exc)
+            log.debug("Readiness check failed (retrying): %s", exc)
         time.sleep(1)
     else:
         if not api_responded:
@@ -61,7 +61,7 @@ def wait_for_ha_ready(url: str, token: str) -> None:
         )
 
     # Gate 2: Entities registered
-    logger.info("Waiting for HA entities to register...")
+    log("Waiting for HA entities to register...")
     last_entity_count = 0
     for attempt in range(ENTITY_TIMEOUT):
         try:
@@ -69,13 +69,13 @@ def wait_for_ha_ready(url: str, token: str) -> None:
             if r.status_code == 200:
                 entity_count = len(r.json())
                 if entity_count >= MIN_ENTITIES:
-                    logger.info(f"HA ready: {entity_count} entities registered ({attempt + 1}s)")
+                    log(f"HA ready: {entity_count} entities registered ({attempt + 1}s)")
                     break
                 if entity_count != last_entity_count:
-                    logger.info(f"  {entity_count} entities registered, waiting for {MIN_ENTITIES}+...")
+                    log(f"  {entity_count} entities registered, waiting for {MIN_ENTITIES}+...")
                     last_entity_count = entity_count
         except (requests.RequestException, ValueError) as exc:
-            logger.debug("Readiness check failed (retrying): %s", exc)
+            log.debug("Readiness check failed (retrying): %s", exc)
         time.sleep(1)
     else:
         raise TimeoutError(
