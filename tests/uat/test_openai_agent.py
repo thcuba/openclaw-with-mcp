@@ -361,17 +361,19 @@ class TestExtractToolResultText:
 class TestDetectModel:
     """Test model auto-detection."""
 
-    def test_returns_first_model_id(self):
+    @pytest.mark.asyncio
+    async def test_returns_first_model_id(self):
         """Returns the first model ID from the API."""
         client = MagicMock()
         model = MagicMock()
         model.id = "llama-3.1-8b"
-        client.models.list.return_value = MagicMock(data=[model])
-        assert openai_agent.detect_model(client) == "llama-3.1-8b"
+        client.models.list = AsyncMock(return_value=MagicMock(data=[model]))
+        assert await openai_agent.detect_model(client) == "llama-3.1-8b"
 
-    def test_raises_when_no_models(self):
+    @pytest.mark.asyncio
+    async def test_raises_when_no_models(self):
         """Raises RuntimeError when no models are available."""
         client = MagicMock()
-        client.models.list.return_value = MagicMock(data=[])
+        client.models.list = AsyncMock(return_value=MagicMock(data=[]))
         with pytest.raises(RuntimeError, match="No models available"):
-            openai_agent.detect_model(client)
+            await openai_agent.detect_model(client)
