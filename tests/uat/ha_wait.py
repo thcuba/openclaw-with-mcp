@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 
 import requests
 
@@ -21,7 +22,7 @@ API_TIMEOUT = 120
 ENTITY_TIMEOUT = 30
 
 
-def wait_for_ha_ready(url: str, token: str, log: callable = logging.info) -> None:
+def wait_for_ha_ready(url: str, token: str, log: Callable[[str], None] = logger.info) -> None:
     """Wait until HA is fully ready: components loaded, entities registered.
 
     Raises TimeoutError if any gate is not reached within its timeout.
@@ -50,7 +51,7 @@ def wait_for_ha_ready(url: str, token: str, log: callable = logging.info) -> Non
                     log(f"  {component_count} components loaded, waiting for {MIN_COMPONENTS}+...")
                     last_component_count = component_count
         except (requests.RequestException, ValueError) as exc:
-            log.debug("Readiness check failed (retrying): %s", exc)
+            logger.debug("Readiness check failed (retrying): %s", exc)
         time.sleep(1)
     else:
         if not api_responded:
@@ -75,7 +76,7 @@ def wait_for_ha_ready(url: str, token: str, log: callable = logging.info) -> Non
                     log(f"  {entity_count} entities registered, waiting for {MIN_ENTITIES}+...")
                     last_entity_count = entity_count
         except (requests.RequestException, ValueError) as exc:
-            log.debug("Readiness check failed (retrying): %s", exc)
+            logger.debug("Readiness check failed (retrying): %s", exc)
         time.sleep(1)
     else:
         raise TimeoutError(
