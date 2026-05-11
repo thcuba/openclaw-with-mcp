@@ -863,7 +863,7 @@ class TestCreateIngressSession:
         with patch(
             "ha_mcp.tools.tools_addons._supervisor_api_call",
             new_callable=AsyncMock,
-            return_value={"success": True, "result": {"session": "abc-token-123"}},
+            return_value={"session": "abc-token-123"},
         ):
             session = await _create_ingress_session(client)
 
@@ -871,23 +871,25 @@ class TestCreateIngressSession:
 
     @pytest.mark.asyncio
     async def test_supervisor_error_response_propagates(self):
-        """When _supervisor_api_call returns success=False, the error is raised."""
+        """When _supervisor_api_call raises ToolError, it propagates."""
         from ha_mcp.tools.tools_addons import _create_ingress_session
+        from ha_mcp.errors import create_error_response, ErrorCode
+        from ha_mcp.tools.helpers import raise_tool_error
 
         client = _make_mock_client()
-        error_response = {
-            "success": False,
-            "error": {
-                "code": "CONNECTION_FAILED",
-                "message": "WS connection failed",
-            },
-        }
+
+        async def mock_fail(*args, **kwargs):
+            raise_tool_error(
+                create_error_response(
+                    ErrorCode.CONNECTION_FAILED,
+                    "WS connection failed",
+                )
+            )
 
         with (
             patch(
                 "ha_mcp.tools.tools_addons._supervisor_api_call",
-                new_callable=AsyncMock,
-                return_value=error_response,
+                side_effect=mock_fail,
             ),
             pytest.raises(ToolError) as exc_info,
         ):
@@ -908,7 +910,7 @@ class TestCreateIngressSession:
             patch(
                 "ha_mcp.tools.tools_addons._supervisor_api_call",
                 new_callable=AsyncMock,
-                return_value={"success": True, "result": {}},
+                return_value={},
             ),
             pytest.raises(ToolError) as exc_info,
         ):
@@ -929,7 +931,7 @@ class TestCreateIngressSession:
             patch(
                 "ha_mcp.tools.tools_addons._supervisor_api_call",
                 new_callable=AsyncMock,
-                return_value={"success": True, "result": {"session": ""}},
+                return_value={"session": ""},
             ),
             pytest.raises(ToolError) as exc_info,
         ):
@@ -950,7 +952,7 @@ class TestCreateIngressSession:
             patch(
                 "ha_mcp.tools.tools_addons._supervisor_api_call",
                 new_callable=AsyncMock,
-                return_value={"success": True, "result": {"session": 12345}},
+                return_value={"session": 12345},
             ),
             pytest.raises(ToolError) as exc_info,
         ):
@@ -2454,58 +2456,49 @@ class TestCallAddonApiPythonTransform:
 
 # Mock Supervisor API responses for list_addons tests
 _ADDONS_LIST_RESPONSE = {
-    "success": True,
-    "result": {
-        "addons": [
-            {
-                "name": "Matter Server",
-                "slug": "core_matter_server",
-                "description": "Matter support",
-                "version": "8.3.0",
-                "state": "started",
-                "update_available": False,
-                "repository": "core",
-            },
-            {
-                "name": "Music Assistant",
-                "slug": "music_assistant",
-                "description": "Music player",
-                "version": "1.4.0",
-                "state": "started",
-                "update_available": False,
-                "repository": "community",
-            },
-            {
-                "name": "Stopped Addon",
-                "slug": "stopped_addon",
-                "description": "Not running",
-                "version": "1.0.0",
-                "state": "stopped",
-                "update_available": False,
-                "repository": "core",
-            },
-        ],
-    },
+    "addons": [
+        {
+            "name": "Matter Server",
+            "slug": "core_matter_server",
+            "description": "Matter support",
+            "version": "8.3.0",
+            "state": "started",
+            "update_available": False,
+            "repository": "core",
+        },
+        {
+            "name": "Music Assistant",
+            "slug": "music_assistant",
+            "description": "Music player",
+            "version": "1.4.0",
+            "state": "started",
+            "update_available": False,
+            "repository": "community",
+        },
+        {
+            "name": "Stopped Addon",
+            "slug": "stopped_addon",
+            "description": "Not running",
+            "version": "1.0.0",
+            "state": "stopped",
+            "update_available": False,
+            "repository": "core",
+        },
+    ],
 }
 
 _MATTER_STATS_RESPONSE = {
-    "success": True,
-    "result": {
-        "cpu_percent": 0.5,
-        "memory_percent": 2.0,
-        "memory_usage": 163987456,
-        "memory_limit": 8312754176,
-    },
+    "cpu_percent": 0.5,
+    "memory_percent": 2.0,
+    "memory_usage": 163987456,
+    "memory_limit": 8312754176,
 }
 
 _MUSIC_STATS_RESPONSE = {
-    "success": True,
-    "result": {
-        "cpu_percent": 1.2,
-        "memory_percent": 10.8,
-        "memory_usage": 896094208,
-        "memory_limit": 8312754176,
-    },
+    "cpu_percent": 1.2,
+    "memory_percent": 10.8,
+    "memory_usage": 896094208,
+    "memory_limit": 8312754176,
 }
 
 
@@ -2587,7 +2580,7 @@ class TestListAddonsStats:
                 raise Exception("Connection reset")
             if endpoint == "/addons/music_assistant/stats":
                 return _MUSIC_STATS_RESPONSE
-            return {"success": False}
+            return {}
 
         with patch(
             "ha_mcp.tools.tools_addons._supervisor_api_call",
@@ -2661,17 +2654,14 @@ class TestManageAddon:
         async def mock_supervisor_api(client, endpoint, **kwargs):
             if endpoint == "/addons/test_addon/info":
                 return {
-                    "success": True,
-                    "result": {
-                        "options": {"FF_KIOSK": False, "FF_OPEN_URL": "https://old.example.com"},
-                        "schema": [
-                            {"name": "FF_KIOSK", "required": False, "type": "bool"},
-                            {"name": "FF_OPEN_URL", "required": False, "type": "str"},
-                        ],
-                    },
+                    "options": {"FF_KIOSK": False, "FF_OPEN_URL": "https://old.example.com"},
+                    "schema": [
+                        {"name": "FF_KIOSK", "required": False, "type": "bool"},
+                        {"name": "FF_OPEN_URL", "required": False, "type": "str"},
+                    ],
                 }
             # POST /addons/test_addon/options
-            return {"success": True, "result": {}}
+            return {}
 
         with patch(
             "ha_mcp.tools.tools_addons._supervisor_api_call",
@@ -2694,16 +2684,13 @@ class TestManageAddon:
         async def mock_supervisor_api(client, endpoint, **kwargs):
             if endpoint == "/addons/test_addon/info":
                 return {
-                    "success": True,
-                    "result": {
-                        "options": {"required_key": "existing_value", "log_level": "info"},
-                        "schema": [
-                            {"name": "required_key", "required": True, "type": "str"},
-                            {"name": "log_level", "required": False, "type": "str"},
-                        ],
-                    },
+                    "options": {"required_key": "existing_value", "log_level": "info"},
+                    "schema": [
+                        {"name": "required_key", "required": True, "type": "str"},
+                        {"name": "log_level", "required": False, "type": "str"},
+                    ],
                 }
-            return {"success": True, "result": {}}
+            return {}
 
         with patch(
             "ha_mcp.tools.tools_addons._supervisor_api_call",
@@ -2724,19 +2711,16 @@ class TestManageAddon:
         async def mock_supervisor_api(client, endpoint, **kwargs):
             if endpoint == "/addons/test_addon/info":
                 return {
-                    "success": True,
-                    "result": {
-                        "options": {
-                            "ssh": {"sftp": False, "authorized_keys": ["key1"]},
-                            "log_level": "info",
-                        },
-                        "schema": [
-                            {"name": "ssh", "type": "schema"},
-                            {"name": "log_level", "required": False, "type": "str"},
-                        ],
+                    "options": {
+                        "ssh": {"sftp": False, "authorized_keys": ["key1"]},
+                        "log_level": "info",
                     },
+                    "schema": [
+                        {"name": "ssh", "type": "schema"},
+                        {"name": "log_level", "required": False, "type": "str"},
+                    ],
                 }
-            return {"success": True, "result": {}}
+            return {}
 
         with patch(
             "ha_mcp.tools.tools_addons._supervisor_api_call",
@@ -2759,13 +2743,10 @@ class TestManageAddon:
         async def mock_supervisor_api(client, endpoint, **kwargs):
             if endpoint == "/addons/test_addon/info":
                 return {
-                    "success": True,
-                    "result": {
-                        "options": {"log_level": "info"},
-                        "schema": [{"name": "log_level", "required": False, "type": "str"}],
-                    },
+                    "options": {"log_level": "info"},
+                    "schema": [{"name": "log_level", "required": False, "type": "str"}],
                 }
-            return {"success": True, "result": {}}
+            return {}
 
         with patch(
             "ha_mcp.tools.tools_addons._supervisor_api_call",
@@ -2786,7 +2767,7 @@ class TestManageAddon:
         """Config mode: boot field is included in POST payload."""
         with patch(
             "ha_mcp.tools.tools_addons._supervisor_api_call",
-            return_value={"success": True, "result": {}},
+            return_value={},
         ) as mock_sup:
             result = await manage_addon_tool(slug="test_addon", boot="manual")
 
@@ -2800,7 +2781,7 @@ class TestManageAddon:
         """Config mode: auto_update and watchdog are sent together in one call."""
         with patch(
             "ha_mcp.tools.tools_addons._supervisor_api_call",
-            return_value={"success": True, "result": {}},
+            return_value={},
         ) as mock_sup:
             result = await manage_addon_tool(
                 slug="test_addon", auto_update=False, watchdog=True
@@ -2816,7 +2797,7 @@ class TestManageAddon:
         """Config mode: network port mapping is sent correctly."""
         with patch(
             "ha_mcp.tools.tools_addons._supervisor_api_call",
-            return_value={"success": True, "result": {}},
+            return_value={},
         ) as mock_sup:
             result = await manage_addon_tool(
                 slug="test_addon", network={"5800/tcp": 8082}
@@ -2887,13 +2868,10 @@ class TestManageAddon:
             calls.append((endpoint, kwargs))
             if endpoint == "/addons/test_addon/info":
                 return {
-                    "success": True,
-                    "result": {
-                        "options": {},
-                        "schema": [{"name": "log_level", "required": False, "type": "str"}],
-                    },
+                    "options": {},
+                    "schema": [{"name": "log_level", "required": False, "type": "str"}],
                 }
-            return {"success": True, "result": {}}
+            return {}
 
         with patch(
             "ha_mcp.tools.tools_addons._supervisor_api_call",
@@ -3185,12 +3163,9 @@ class TestGetAddonInfoLogLevel:
             "ha_mcp.tools.tools_addons._supervisor_api_call",
             new_callable=AsyncMock,
             return_value={
-                "success": True,
-                "result": {
-                    "name": "Example",
-                    "slug": "example",
-                    "options": {"log_level": "debug"},
-                },
+                "name": "Example",
+                "slug": "example",
+                "options": {"log_level": "debug"},
             },
         ):
             result = await get_addon_info(client, "example")
@@ -3206,12 +3181,9 @@ class TestGetAddonInfoLogLevel:
             "ha_mcp.tools.tools_addons._supervisor_api_call",
             new_callable=AsyncMock,
             return_value={
-                "success": True,
-                "result": {
-                    "name": "NoLogLevel",
-                    "slug": "nll",
-                    "options": {"port": 1883},
-                },
+                "name": "NoLogLevel",
+                "slug": "nll",
+                "options": {"port": 1883},
             },
         ):
             result = await get_addon_info(client, "nll")
@@ -3221,20 +3193,27 @@ class TestGetAddonInfoLogLevel:
 
     @pytest.mark.asyncio
     async def test_passes_through_supervisor_error(self):
-        """Error responses shouldn't gain a synthetic log_level field."""
+        """ToolError from supervisor call should propagate."""
+        from ha_mcp.errors import create_error_response, ErrorCode
+        from ha_mcp.tools.helpers import raise_tool_error
         client = _make_mock_client()
-        error_response = {
-            "success": False,
-            "error": {"code": "RESOURCE_NOT_FOUND", "message": "no supervisor"},
-        }
+
+        async def mock_fail(*args, **kwargs):
+            raise_tool_error(
+                create_error_response(
+                    ErrorCode.RESOURCE_NOT_FOUND,
+                    "no supervisor",
+                )
+            )
+
         with patch(
             "ha_mcp.tools.tools_addons._supervisor_api_call",
-            new_callable=AsyncMock,
-            return_value=error_response,
-        ):
-            result = await get_addon_info(client, "whatever")
+            side_effect=mock_fail,
+        ), pytest.raises(ToolError) as exc_info:
+            await get_addon_info(client, "whatever")
 
-        assert result == error_response
+        result = _parse_tool_error(exc_info)
+        assert result["error"]["code"] == "RESOURCE_NOT_FOUND"
 
 
 class TestSupervisorApiCall:

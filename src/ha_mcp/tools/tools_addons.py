@@ -218,10 +218,11 @@ async def _supervisor_api_call(
     method: str = "GET",
     data: dict[str, Any] | None = None,
     timeout: int | None = None,
-) -> dict[str, Any]:
+) -> Any:
     """Make a Supervisor API call via WebSocket.
 
     Handles connection, command execution, error checking, and cleanup.
+    Raises ToolError on failure.
 
     Args:
         client: Home Assistant REST client (provides base_url and token)
@@ -231,7 +232,7 @@ async def _supervisor_api_call(
         timeout: Optional timeout override
 
     Returns:
-        The "result" field from a successful response, or an error dict.
+        The "result" field from a successful response.
     """
     ws_client = None
     try:
@@ -239,8 +240,11 @@ async def _supervisor_api_call(
             client.base_url, client.token, verify_ssl=client.verify_ssl
         )
         if error or ws_client is None:
-            return error or create_connection_error(
-                "Failed to establish WebSocket connection",
+            raise_tool_error(
+                error
+                or create_connection_error(
+                    "Failed to establish WebSocket connection",
+                )
             )
 
         kwargs: dict[str, Any] = {"endpoint": endpoint, "method": method}
@@ -272,7 +276,7 @@ async def _supervisor_api_call(
                 )
             )
 
-        return {"success": True, "result": result.get("result", {})}
+        return result.get("result", {})
 
     except ToolError:
         raise
@@ -333,19 +337,17 @@ async def _create_ingress_session(client: HomeAssistantClient) -> str:
     container. Sessions are valid for ~15 minutes; we mint a fresh one per
     call to avoid managing lifetime.
     """
-    response = await _supervisor_api_call(
+    result = await _supervisor_api_call(
         client, "/ingress/session", method="POST", data={}
     )
-    if not response.get("success"):
-        raise_tool_error(response)
 
-    session = response.get("result", {}).get("session")
+    session = result.get("session")
     if not isinstance(session, str) or not session:
         raise_tool_error(
             create_error_response(
                 ErrorCode.SERVICE_CALL_FAILED,
                 "Supervisor returned no ingress session token",
-                details=str(response),
+                details=str(result),
             )
         )
     return session
@@ -514,11 +516,8 @@ async def get_addon_info(client: HomeAssistantClient, slug: str) -> dict[str, An
         Top-level ``log_level`` is surfaced when the add-on exposes one via its
         Supervisor options or schema (e.g., ``"debug"``, ``"info"``, etc.).
     """
-    response = await _supervisor_api_call(client, f"/addons/{slug}/info")
-    if not response.get("success"):
-        return response  # TODO(tech-debt): should raise ToolError per AGENTS.md Pattern B
+    addon = await _supervisor_api_call(client, f"/addons/{slug}/info")
 
-    addon = response["result"] if isinstance(response["result"], dict) else {}
     result: dict[str, Any] = {"success": True, "addon": addon}
 
     log_level = _extract_addon_log_level(addon)
@@ -569,11 +568,7 @@ async def list_addons(
     Returns:
         Dictionary with installed add-ons and their status.
     """
-    response = await _supervisor_api_call(client, "/addons")
-    if not response.get("success"):
-        return response  # TODO(tech-debt): should raise ToolError per AGENTS.md Pattern B
-
-    data = response["result"]
+    data = await _supervisor_api_call(client, "/addons")
     addons = data.get("addons", [])
 
     # Fetch stats for running addons in parallel to avoid sequential overhead
@@ -583,15 +578,13 @@ async def list_addons(
 
         async def _fetch_stats(slug: str) -> tuple[str, dict[str, Any] | None]:
             try:
-                resp = await _supervisor_api_call(client, f"/addons/{slug}/stats")
-                if resp.get("success"):
-                    s = resp["result"]
-                    return slug, {
-                        "cpu_percent": s.get("cpu_percent"),
-                        "memory_percent": s.get("memory_percent"),
-                        "memory_usage": s.get("memory_usage"),
-                        "memory_limit": s.get("memory_limit"),
-                    }
+                s = await _supervisor_api_call(client, f"/addons/{slug}/stats")
+                return slug, {
+                    "cpu_percent": s.get("cpu_percent"),
+                    "memory_percent": s.get("memory_percent"),
+                    "memory_usage": s.get("memory_usage"),
+                    "memory_limit": s.get("memory_limit"),
+                }
             except Exception as exc:
                 logger.warning("Failed to fetch stats for addon %s: %s", slug, exc)
             return slug, None
@@ -649,11 +642,8 @@ async def list_available_addons(
     Returns:
         Dictionary with available add-ons and repositories.
     """
-    response = await _supervisor_api_call(client, "/store")
-    if not response.get("success"):
-        return response
+    data = await _supervisor_api_call(client, "/store")
 
-    data = response["result"]
     repositories = data.get("repositories", [])
     addons = data.get("addons", [])
 
@@ -1734,16 +1724,7 @@ def register_addon_tools(mcp: Any, client: HomeAssistantClient, **kwargs: Any) -
             # GET /info provides both current options (for merge) and schema_ui
             # (for pre-write unknown-field detection) in a single roundtrip.
             if "options" in config_data:
-                info_result = await _supervisor_api_call(client, f"/addons/{slug}/info")
-                if not info_result.get("success"):
-                    raise_tool_error(
-                        create_error_response(
-                            ErrorCode.RESOURCE_NOT_FOUND,
-                            f"Add-on '{slug}' not found or Supervisor unavailable",
-                            details=str(info_result),
-                        )
-                    )
-                addon_info = info_result.get("result", {})
+                addon_info = await _supervisor_api_call(client, f"/addons/{slug}/info")
 
                 # Merge caller's options into current options (fixes partial-update rejection).
                 # Supervisor validates the full options dict against the add-on schema,
@@ -1766,27 +1747,13 @@ def register_addon_tools(mcp: Any, client: HomeAssistantClient, **kwargs: Any) -
 
                 config_data["options"] = merged_options
 
-            result = await _supervisor_api_call(
+            await _supervisor_api_call(
                 client,
                 f"/addons/{slug}/options",
                 method="POST",
                 data=config_data,
             )
-            if not result.get("success"):
-                # Surface Supervisor schema errors (e.g. missing required field) as
-                # VALIDATION_FAILED so the model receives an actionable error code.
-                error_detail = str(result)
-                raise_tool_error(
-                    create_error_response(
-                        ErrorCode.VALIDATION_FAILED,
-                        f"Supervisor rejected configuration for add-on '{slug}'",
-                        details=error_detail,
-                        suggestions=[
-                            "Fetch current options via ha_get_addon(slug) to see required fields",
-                            "Re-submit all required option fields together",
-                        ],
-                    )
-                )
+
             submitted_fields = list(config_data.keys())
             response: dict = {}
             if {"options", "network"} & config_data.keys():
