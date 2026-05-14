@@ -183,7 +183,7 @@ class TestAutomationLifecycle:
             },
         )
 
-        trigger_data = assert_mcp_success(trigger_result, "automation trigger")
+        assert_mcp_success(trigger_result, "automation trigger")
         logger.info("✅ Automation triggered successfully")
 
         # 5. VERIFY: Check that automation ran (via logbook)
@@ -220,7 +220,7 @@ class TestAutomationLifecycle:
                 "config": update_config},
         )
 
-        update_data = assert_mcp_success(update_result, "automation update")
+        assert_mcp_success(update_result, "automation update")
         logger.info("✅ Automation updated successfully")
 
         # 7. VERIFY: Update was applied
@@ -259,7 +259,7 @@ class TestAutomationLifecycle:
             { "identifier": automation_entity},
         )
 
-        delete_data = assert_mcp_success(delete_result, "automation deletion")
+        assert_mcp_success(delete_result, "automation deletion")
         logger.info("✅ Automation deleted successfully")
 
         # 9. VERIFY: Automation is gone
@@ -349,7 +349,7 @@ class TestAutomationLifecycle:
             },
         )
 
-        enable_data = assert_mcp_success(enable_result, "automation enable")
+        assert_mcp_success(enable_result, "automation enable")
 
         # Verify automation is now enabled
         state_reached = await wait_for_entity_state(
@@ -371,7 +371,7 @@ class TestAutomationLifecycle:
             },
         )
 
-        disable_data = assert_mcp_success(disable_result, "automation disable")
+        assert_mcp_success(disable_result, "automation disable")
 
         # Verify automation is now disabled
         state_reached = await wait_for_entity_state(
@@ -640,7 +640,7 @@ class TestAutomationLifecycle:
             { "identifier": automation_entity},
         )
 
-        delete_data = assert_mcp_success(delete_result, "complex automation deletion")
+        assert_mcp_success(delete_result, "complex automation deletion")
         logger.info("✅ Complex automation cleaned up")
 
     async def test_automation_mode_behaviors(
@@ -732,7 +732,7 @@ class TestAutomationLifecycle:
                 { "identifier": automation_entity},
             )
 
-            delete_data = assert_mcp_success(
+            assert_mcp_success(
                 delete_result, f"{mode} mode automation deletion"
             )
             logger.info(f"🗑️ Mode {mode} automation cleaned up")

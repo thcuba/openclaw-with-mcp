@@ -873,7 +873,7 @@ class TestSetPrefsPerKeyHash:
         on the comprehension at the dict-branch's mismatch loop.
         """
         current_prefs = _sample_prefs()
-        per_key = _compute_per_key_hashes(current_prefs)
+        _compute_per_key_hashes(current_prefs)
         # Both device_consumption and energy_sources are stale; only
         # device_consumption_water hash is fresh (and not submitted).
         config = {
