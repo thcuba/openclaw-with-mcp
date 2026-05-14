@@ -130,8 +130,7 @@
         </ol>
 
         <b>Manual (terminal)</b>
-        <pre style="background:#0b1220;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px">mcporter config add HA "http://localhost:8123/api/mcp" \
-  --header "Authorization=Bearer YOUR_LONG_LIVED_TOKEN" \
+        <pre style="background:#0b1220;padding:8px;border-radius:6px;overflow-x:auto;font-size:12px">mcporter config add HA "http://localhost:9583/private_...secret..." \
   --scope home</pre>
 
         <b>After upgrades</b> — if OpenClaw has stale HA data:

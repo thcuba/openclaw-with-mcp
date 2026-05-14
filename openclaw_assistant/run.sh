@@ -59,6 +59,14 @@ FORCE_IPV4_DNS=$(jq -r '.force_ipv4_dns // true' "$OPTIONS_FILE")
 ACCESS_MODE=$(jq -r '.access_mode // "custom"' "$OPTIONS_FILE")
 NGINX_LOG_LEVEL=$(jq -r '.nginx_log_level // "minimal"' "$OPTIONS_FILE")
 AUTO_CONFIGURE_MCP=$(jq -r '.auto_configure_mcp // false' "$OPTIONS_FILE")
+
+# MCP Server options
+BACKUP_HINT=$(jq -r '.backup_hint // "normal"' "$OPTIONS_FILE")
+ENABLE_TOOL_SEARCH=$(jq -r '.enable_tool_search // false' "$OPTIONS_FILE")
+VERIFY_SSL=$(jq -r '.verify_ssl // true' "$OPTIONS_FILE")
+ADVANCED_DEBUG_LOGGING=$(jq -r '.advanced_debug_logging // false' "$OPTIONS_FILE")
+SECRET_PATH_OVERRIDE=$(jq -r '.secret_path // empty' "$OPTIONS_FILE")
+
 GW_ENV_VARS_TYPE=$(jq -r 'if .gateway_env_vars == null then "null" else (.gateway_env_vars | type) end' "$OPTIONS_FILE")
 GW_ENV_VARS_RAW=$(jq -r '.gateway_env_vars // empty' "$OPTIONS_FILE")
 GW_ENV_VARS_JSON=$(jq -c '.gateway_env_vars // []' "$OPTIONS_FILE")
@@ -737,47 +745,102 @@ if [ -f /usr/local/lib/openclaw-proxy-shim.cjs ]; then
 fi
 
 # ------------------------------------------------------------------------------
-# Auto-configure MCP (Model Context Protocol) for Home Assistant
-# Registers HA as an MCP server so OpenClaw can control HA entities/services.
-# Requires: homeassistant_token set in add-on options + mcporter CLI available.
-# Runs once; re-runs when the token changes.
-# Auto-detects HA API URL: supervisor proxy if available, else localhost:8123.
+# Manage local HA-MCP Server
 # ------------------------------------------------------------------------------
-if [ "$AUTO_CONFIGURE_MCP" = "true" ] && [ -n "$HA_TOKEN" ]; then
-  if command -v mcporter >/dev/null 2>&1; then
-    # Detect HA API URL: prefer supervisor proxy (works in all add-on network modes),
-    # fall back to localhost:8123 (works with host_network: true).
-    if [ -n "${SUPERVISOR_TOKEN:-}" ]; then
-      MCP_HA_URL="http://supervisor/core/api/mcp"
-    else
-      MCP_HA_URL="http://localhost:8123/api/mcp"
-    fi
-    MCP_FLAG="/config/.openclaw/.mcp_ha_configured"
-    MCP_TOKEN_HASH=$(printf '%s' "$HA_TOKEN" | sha256sum | cut -d' ' -f1)
 
-    if [ -f "$MCP_FLAG" ] && [ "$(cat "$MCP_FLAG" 2>/dev/null)" = "$MCP_TOKEN_HASH" ]; then
-      echo "INFO: MCP Home Assistant server already configured (token unchanged)"
+# Function to generate a secure random path with 128-bit entropy.
+generate_mcp_secret_path() {
+  # We use python to match the logic in original ha-mcp start.py
+  python3 -c "import secrets; print('/private_' + secrets.token_urlsafe(16))"
+}
+
+_MCP_SECRET_PATH_RE="^/(?!.*://)\S{7,}$"
+
+# Get existing secret path or create a new one.
+MCP_DATA_DIR="/config/ha_mcp"
+mkdir -p "$MCP_DATA_DIR"
+MCP_SECRET_FILE="$MCP_DATA_DIR/secret_path.txt"
+MCP_SECRET_PATH=""
+
+if [ -n "$SECRET_PATH_OVERRIDE" ]; then
+  # Use override from config
+  MCP_SECRET_PATH="$SECRET_PATH_OVERRIDE"
+  if [[ ! "$MCP_SECRET_PATH" =~ ^/ ]]; then
+    MCP_SECRET_PATH="/$MCP_SECRET_PATH"
+  fi
+  echo "INFO: Using custom MCP secret path from configuration"
+  echo "$MCP_SECRET_PATH" > "$MCP_SECRET_FILE"
+elif [ -f "$MCP_SECRET_FILE" ]; then
+  MCP_SECRET_PATH=$(cat "$MCP_SECRET_FILE")
+  echo "INFO: Using existing auto-generated MCP secret path"
+else
+  MCP_SECRET_PATH=$(generate_mcp_secret_path)
+  echo "$MCP_SECRET_PATH" > "$MCP_SECRET_FILE"
+  echo "INFO: Generated new MCP secret path"
+fi
+
+# Start ha-mcp server
+start_ha_mcp_server() {
+  echo "Starting local Home Assistant MCP Server..."
+
+  # Set up environment for ha-mcp
+  export HOMEASSISTANT_URL="http://supervisor/core"
+  export HOMEASSISTANT_TOKEN="${HA_TOKEN:-$SUPERVISOR_TOKEN}"
+  export BACKUP_HINT="$BACKUP_HINT"
+  export ENABLE_TOOL_SEARCH=$(echo "$ENABLE_TOOL_SEARCH" | tr '[:upper:]' '[:lower:]')
+  export HA_VERIFY_SSL=$(echo "$VERIFY_SSL" | tr '[:upper:]' '[:lower:]')
+
+  # Run from /app where uv sync was performed
+  (
+    cd /app
+    # Use the virtualenv created by uv
+    export PATH="/app/.venv/bin:$PATH"
+
+    python3 -m ha_mcp.main \
+      --transport http \
+      --host 0.0.0.0 \
+      --port 9583 \
+      --path "$MCP_SECRET_PATH" \
+      --stateless-http \
+      > /config/ha_mcp_server.log 2>&1
+  ) &
+  MCP_SERVER_PID=$!
+  echo "HA-MCP Server started with PID $MCP_SERVER_PID (logging to /config/ha_mcp_server.log)"
+}
+
+start_ha_mcp_server
+
+# ------------------------------------------------------------------------------
+# Auto-configure MCP (Model Context Protocol) for Home Assistant
+# Registers local HA-MCP as an MCP server so OpenClaw can control HA entities/services.
+# ------------------------------------------------------------------------------
+if [ "$AUTO_CONFIGURE_MCP" = "true" ]; then
+  if command -v mcporter >/dev/null 2>&1; then
+    # Point to the local MCP server we just started
+    MCP_HA_URL="http://localhost:9583${MCP_SECRET_PATH}"
+
+    MCP_FLAG="/config/.openclaw/.mcp_ha_configured"
+    # Token hash including the secret path to re-trigger if either changes
+    MCP_CONFIG_HASH=$(printf '%s:%s' "${HA_TOKEN:-$SUPERVISOR_TOKEN}" "$MCP_SECRET_PATH" | sha256sum | cut -d' ' -f1)
+
+    if [ -f "$MCP_FLAG" ] && [ "$(cat "$MCP_FLAG" 2>/dev/null)" = "$MCP_CONFIG_HASH" ]; then
+      echo "INFO: MCP Home Assistant server already configured (unchanged)"
     else
-      echo "INFO: Configuring MCP for Home Assistant at $MCP_HA_URL ..."
-      # Remove stale entry if present (token may have changed)
+      echo "INFO: Configuring OpenClaw to use local MCP server at $MCP_HA_URL ..."
+      # Remove stale entry if present
       mcporter config remove HA 2>/dev/null || true
 
-      if mcporter config add HA "$MCP_HA_URL" \
-          --header "Authorization=Bearer $HA_TOKEN" \
-          --scope home 2>&1; then
-        printf '%s' "$MCP_TOKEN_HASH" > "$MCP_FLAG"
-        echo "INFO: MCP server 'HA' registered — OpenClaw can now control Home Assistant"
+      if mcporter config add HA "$MCP_HA_URL" --scope home 2>&1; then
+        printf '%s' "$MCP_CONFIG_HASH" > "$MCP_FLAG"
+        echo "INFO: MCP server 'HA' registered — OpenClaw can now control Home Assistant via local MCP server"
       else
         echo "WARN: MCP auto-configuration failed. Configure manually in the terminal:"
-        echo "WARN:   mcporter config add HA \"$MCP_HA_URL\" --header \"Authorization=Bearer YOUR_TOKEN\" --scope home"
+        echo "WARN:   mcporter config add HA \"$MCP_HA_URL\" --scope home"
       fi
     fi
   else
     echo "INFO: mcporter not available; skipping MCP auto-configuration (run 'openclaw onboard' first)"
   fi
-elif [ "$AUTO_CONFIGURE_MCP" = "true" ] && [ -z "$HA_TOKEN" ]; then
-  echo "INFO: MCP auto-configure enabled but homeassistant_token not set — skipping"
-  echo "INFO: To auto-configure, set homeassistant_token in add-on Configuration, then restart"
 fi
 
 start_openclaw_runtime() {

@@ -33,6 +33,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+# Install uv for ha-mcp management
+COPY --from=ghcr.io/astral-sh/uv:0.11.0 /uv /uv/bin/uv
+ENV PATH="/uv/bin:${PATH}"
+
+# Install Python 3.13 for ha-mcp
+RUN uv python install 3.13
+
 # Install Node.js 22 LTS from NodeSource (Debian Bookworm ships Node 18, but OpenClaw requires 20+)
 # Use explicit keyring + apt source instead of setup_22.x pipe script for deterministic builds.
 RUN mkdir -p /etc/apt/keyrings \
@@ -141,6 +148,14 @@ COPY oc-cleanup.sh /usr/local/bin/oc-cleanup
 COPY openclaw-proxy-shim.cjs /usr/local/lib/openclaw-proxy-shim.cjs
 COPY nginx.conf.tpl /etc/nginx/nginx.conf.tpl
 COPY landing.html.tpl /etc/nginx/landing.html.tpl
+
+# Prepare ha-mcp
+WORKDIR /app
+COPY pyproject.toml uv.lock fastmcp.json fastmcp-http.json ./
+COPY src/ ./src/
+RUN uv sync --locked --no-dev --python 3.13
+
+WORKDIR /
 RUN chmod +x /run.sh /oc_config_helper.py /render_nginx.py /usr/local/bin/oc-cleanup \
     && mkdir -p /run/nginx
 
