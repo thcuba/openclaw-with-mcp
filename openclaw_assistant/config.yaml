@@ -1,5 +1,5 @@
 name: OpenClaw Assistant
-version: "0.5.72"
+version: "7.4.1"
 slug: openclaw_assistant
 description: Run OpenClaw Assistant (OpenClaw-compatible) as a Home Assistant add-on.
 url: https://github.com/techartdev/OpenClawHomeAssistant
@@ -10,8 +10,9 @@ arch:
 startup: services
 boot: auto
 init: false
-hassio_api: false
-homeassistant_api: false
+hassio_api: true
+hassio_role: manager
+homeassistant_api: true
 host_network: true
 
 # Home Assistant Ingress (UI inside the add-on page)
@@ -134,9 +135,24 @@ options:
   gateway_env_vars: []
 
   # Auto-configure MCP (Model Context Protocol) for Home Assistant.
-  # When enabled and homeassistant_token is set, automatically registers HA as an
+  # When enabled, automatically registers the local HA-MCP server as an
   # MCP server in OpenClaw so the AI can control Home Assistant entities/services.
   auto_configure_mcp: false
+
+  # MCP Server: Path to use for the MCP server (auto-generated if empty).
+  secret_path: ""
+
+  # MCP Server: Enable tool search for entities.
+  enable_tool_search: false
+
+  # MCP Server: Verify SSL certificates for Home Assistant connection.
+  verify_ssl: true
+
+  # MCP Server: Backup hint mode (strong|normal|weak|auto).
+  backup_hint: "normal"
+
+  # MCP Server: Enable advanced debug logging.
+  advanced_debug_logging: false
 
 
 schema:
@@ -169,3 +185,8 @@ schema:
       value: str
   nginx_log_level: list(full|minimal)?
   auto_configure_mcp: bool?
+  secret_path: str?
+  enable_tool_search: bool?
+  verify_ssl: bool?
+  backup_hint: list(strong|normal|weak|auto)?
+  advanced_debug_logging: bool?
