@@ -35,9 +35,9 @@ dependencies = [
 ]
 
 [project.urls]
-"Homepage" = "https://github.com/homeassistant-ai/ha-mcp"
-"Bug Tracker" = "https://github.com/homeassistant-ai/ha-mcp/issues"
-"Repository" = "https://github.com/homeassistant-ai/ha-mcp"
+"Homepage" = "https://github.com/thcuba/openclaw-with-mcp"
+"Bug Tracker" = "https://github.com/thcuba/openclaw-with-mcp/issues"
+"Repository" = "https://github.com/thcuba/openclaw-with-mcp"
 
 [project.scripts]
 ha-mcp = "ha_mcp.__main__:main"
