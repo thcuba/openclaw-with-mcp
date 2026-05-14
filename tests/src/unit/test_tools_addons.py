@@ -872,9 +872,9 @@ class TestCreateIngressSession:
     @pytest.mark.asyncio
     async def test_supervisor_error_response_propagates(self):
         """When _supervisor_api_call raises ToolError, it propagates."""
-        from ha_mcp.tools.tools_addons import _create_ingress_session
-        from ha_mcp.errors import create_error_response, ErrorCode
+        from ha_mcp.errors import ErrorCode, create_error_response
         from ha_mcp.tools.helpers import raise_tool_error
+        from ha_mcp.tools.tools_addons import _create_ingress_session
 
         client = _make_mock_client()
 
@@ -3194,7 +3194,7 @@ class TestGetAddonInfoLogLevel:
     @pytest.mark.asyncio
     async def test_passes_through_supervisor_error(self):
         """ToolError from supervisor call should propagate."""
-        from ha_mcp.errors import create_error_response, ErrorCode
+        from ha_mcp.errors import ErrorCode, create_error_response
         from ha_mcp.tools.helpers import raise_tool_error
         client = _make_mock_client()
 

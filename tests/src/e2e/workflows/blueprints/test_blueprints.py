@@ -478,7 +478,7 @@ async def test_blueprint_automation_lifecycle(mcp_client):
         logger.info("✅ Blueprint automation config verified")
 
         # Step 5: Clean up
-        delete_result = await mcp.call_tool_success(
+        await mcp.call_tool_success(
             "ha_config_remove_automation",
             {"identifier": automation_id},
         )

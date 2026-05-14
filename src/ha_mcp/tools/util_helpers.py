@@ -363,8 +363,9 @@ async def add_timezone_metadata(client: Any, data: dict[str, Any]) -> dict[str, 
                 "note": f"All timestamps are in UTC. Home Assistant timezone is {ha_timezone}.",
             },
         }
-    except Exception:
+    except Exception as e:
         # Fallback if config fetch fails
+        logger.debug(f"Failed to fetch timezone metadata: {e}")
         return {
             "data": data,
             "metadata": {

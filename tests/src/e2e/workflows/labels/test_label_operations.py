@@ -196,7 +196,7 @@ class TestLabelEntityRegistryIntegrity:
             "ha_get_state",
             {"entity_id": entity_id},
         )
-        initial_data = parse_mcp_result(initial_result)
+        parse_mcp_result(initial_result)
 
         # Create and set a label
         create_result = await mcp_client.call_tool(

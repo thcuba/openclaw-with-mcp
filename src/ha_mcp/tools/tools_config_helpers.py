@@ -435,7 +435,8 @@ async def _validate_registry_ids(
         """
         try:
             result = await client.send_websocket_message(message)
-        except Exception:
+        except Exception as e:
+            logger.debug(f"Registry lookup {message.get('type')} failed: {e}")
             return False, []
         if isinstance(result, list):
             return True, result

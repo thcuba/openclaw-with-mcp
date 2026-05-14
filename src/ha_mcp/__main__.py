@@ -355,7 +355,7 @@ class StatelessSessionLogFilter(logging.Filter):
     This filter lowers the level to DEBUG so the message only appears with
     verbose logging enabled.
 
-    # TODO: remove when modelcontextprotocol/python-sdk#2329 is resolved
+    # TODO: remove when modelcontextprotocol/python-sdk#2329 is resolved (and released)
     """
 
     def filter(self, record: logging.LogRecord) -> bool:
